@@ -325,150 +325,464 @@ generate|g [options] <schematic> [name] [path]  Generate a Nest element.
     }
     ```
 
-    ### NestJS DTO
+### NestJS DTO
 
-    - 유효성 검사 & 자동 형변환
+- 유효성 검사 & 자동 형변환
 
-        ```jsx
-        $ npm i class-validator class-transformer
-        ```
+    ```jsx
+    $ npm i class-validator class-transformer
+    ```
 
-    - 부분 타입 검사
+- 부분 타입 검사
 
-        ```jsx
-        $ npm i @nestjs/mapped-types
-        ```
+    ```jsx
+    $ npm i @nestjs/mapped-types
+    ```
 
-    - main.ts 파일
+- main.ts 파일
 
-        ```jsx
-        import { NestFactory } from '@nestjs/core';
-        import { AppModule } from './app.module';
-        import { ValidationPipe } from '@nestjs/common';
+    ```jsx
+    import { NestFactory } from '@nestjs/core';
+    import { AppModule } from './app.module';
+    import { ValidationPipe } from '@nestjs/common';
 
-        async function bootstrap() {
-          const app = await NestFactory.create(AppModule);
-          app.useGlobalPipes(
-            new ValidationPipe({
-              whitelist: true,
-              forbidNonWhitelisted: true,
-              transform: true,
-            }),
-          );
-          await app.listen(3000);
+    async function bootstrap() {
+      const app = await NestFactory.create(AppModule);
+      app.useGlobalPipes(
+        new ValidationPipe({
+          whitelist: true,
+          forbidNonWhitelisted: true,
+          transform: true,
+        }),
+      );
+      await app.listen(3000);
+    }
+    bootstrap();
+    ```
+
+- create-movie.dto.ts 파일
+
+    ```jsx
+    import { IsString, IsNumber, IsOptional } from 'class-validator';
+
+    export class CreateMovieDto {
+        @IsString()
+        readonly title: string;
+
+        @IsNumber()
+        readonly year: number;
+        
+        @IsOptional()
+        @IsString({ each: true })
+        readonly genres: string[];
+    }
+    ```
+
+- update-movie.dto.ts 파일
+
+    ```jsx
+    import { PartialType } from '@nestjs/mapped-types';
+    import { CreateMovieDto } from './create-movie.dto';
+
+    export class UpdateMovieDto extends PartialType(CreateMovieDto) {}
+    ```
+
+- movies.controller.ts 파일
+
+    ```jsx
+    import { Controller, Get, Param, Post, Delete, Put, Patch, Body, Query } from '@nestjs/common';
+    import { MoviesService } from './movies.service';
+    import { Movie } from './entities/movies.entity';
+    import { create } from 'domain';
+    import { CreateMovieDto } from './dto/create-movie.dto';
+    import { UpdateMovieDto } from './dto/update-movie.dto';A
+
+    @Controller('movies')
+    export class MoviesController {
+        constructor(private readonly moviesService: MoviesService) {}
+
+        @Get()
+        getAll(): Movie[] {
+            return this.moviesService.getAll();
         }
-        bootstrap();
-        ```
 
-    - create-movie.dto.ts 파일
-
-        ```jsx
-        import { IsString, IsNumber, IsOptional } from 'class-validator';
-
-        export class CreateMovieDto {
-            @IsString()
-            readonly title: string;
-
-            @IsNumber()
-            readonly year: number;
-            
-            @IsOptional()
-            @IsString({ each: true })
-            readonly genres: string[];
+        @Get(':id')
+        getOne(@Param('id') movieId: number): Movie {
+            return this.moviesService.getOne(movieId);
         }
-        ```
 
-    - update-movie.dto.ts 파일
-
-        ```jsx
-        import { PartialType } from '@nestjs/mapped-types';
-        import { CreateMovieDto } from './create-movie.dto';
-
-        export class UpdateMovieDto extends PartialType(CreateMovieDto) {}
-        ```
-
-    - movies.controller.ts 파일
-
-        ```jsx
-        import { Controller, Get, Param, Post, Delete, Put, Patch, Body, Query } from '@nestjs/common';
-        import { MoviesService } from './movies.service';
-        import { Movie } from './entities/movies.entity';
-        import { create } from 'domain';
-        import { CreateMovieDto } from './dto/create-movie.dto';
-        import { UpdateMovieDto } from './dto/update-movie.dto';A
-
-        @Controller('movies')
-        export class MoviesController {
-            constructor(private readonly moviesService: MoviesService) {}
-
-            @Get()
-            getAll(): Movie[] {
-                return this.moviesService.getAll();
-            }
-
-            @Get(':id')
-            getOne(@Param('id') movieId: number): Movie {
-                return this.moviesService.getOne(movieId);
-            }
-
-            @Post()
-            create(@Body() movieData: CreateMovieDto) {
-                return this.moviesService.create(movieData);
-            }
-
-            @Delete(':id')
-            remove(@Param('id') movieId: number) {
-                return this.moviesService.deleteOne(movieId);
-            }
-
-            @Patch(':id')
-            path(@Param('id') movieId: number, @Body() updateData: UpdateMovieDto) {
-                return this.moviesService.update(movieId, updateData);
-            }
+        @Post()
+        create(@Body() movieData: CreateMovieDto) {
+            return this.moviesService.create(movieData);
         }
-        ```
 
-    - movies.service.ts 파일
-
-        ```jsx
-        import { Injectable, NotFoundException } from '@nestjs/common';
-        import { Movie } from './entities/movies.entity';
-        import { findSourceMap } from 'module';
-        import { CreateMovieDto } from './dto/create-movie.dto';
-        import { UpdateMovieDto } from './dto/update-movie.dto';
-
-        @Injectable()
-        export class MoviesService {
-            private movies: Movie[] = [];
-
-            getAll(): Movie[] {
-                return this.movies;
-            }
-
-            getOne(id: number): Movie {
-                const movie = this.movies.find(movie => movie.id === id);
-                if(!movie) {
-                    throw new NotFoundException(`Movie with ID ${id} not found.`);
-                }
-                return movie;
-            }
-
-            deleteOne(id: number) {
-                this.getOne(id);
-                this.movies = this.movies.filter(movie => movie.id !== id);
-            }
-
-            create(movieData: CreateMovieDto) {
-                this.movies.push({
-                    id: this.movies.length + 1,
-                    ...movieData,
-                })
-            }
-
-            update(id: number, updateData: UpdateMovieDto) {
-                const movie = this.getOne(id);
-                this.deleteOne(id);
-                this.movies.push({...movie, ...updateData});
-            }
+        @Delete(':id')
+        remove(@Param('id') movieId: number) {
+            return this.moviesService.deleteOne(movieId);
         }
-        ```
+
+        @Patch(':id')
+        path(@Param('id') movieId: number, @Body() updateData: UpdateMovieDto) {
+            return this.moviesService.update(movieId, updateData);
+        }
+    }
+    ```
+
+- movies.service.ts 파일
+
+    ```jsx
+    import { Injectable, NotFoundException } from '@nestjs/common';
+    import { Movie } from './entities/movies.entity';
+    import { findSourceMap } from 'module';
+    import { CreateMovieDto } from './dto/create-movie.dto';
+    import { UpdateMovieDto } from './dto/update-movie.dto';
+
+    @Injectable()
+    export class MoviesService {
+        private movies: Movie[] = [];
+
+        getAll(): Movie[] {
+            return this.movies;
+        }
+
+        getOne(id: number): Movie {
+            const movie = this.movies.find(movie => movie.id === id);
+            if(!movie) {
+                throw new NotFoundException(`Movie with ID ${id} not found.`);
+            }
+            return movie;
+        }
+
+        deleteOne(id: number) {
+            this.getOne(id);
+            this.movies = this.movies.filter(movie => movie.id !== id);
+        }
+
+        create(movieData: CreateMovieDto) {
+            this.movies.push({
+                id: this.movies.length + 1,
+                ...movieData,
+            })
+        }
+
+        update(id: number, updateData: UpdateMovieDto) {
+            const movie = this.getOne(id);
+            this.deleteOne(id);
+            this.movies.push({...movie, ...updateData});
+        }
+    }
+    ```
+
+### Modules and Dependency Injection
+
+- module, controller, provider
+- Dependency Injection
+    - Nestjs가 controller에서 service property를 사용해서 import
+    - 즉, Nest가 Service를 import하고 Controller에 inject 한다.
+- app.module.ts 파일
+
+    ```tsx
+    import { Module } from '@nestjs/common';
+    import { MoviesModule } from './movies/movies.module';
+    import { AppController } from './app.controller';
+
+    @Module({
+      imports: [MoviesModule],
+      controllers: [AppController],
+      providers: [],
+    })
+    export class AppModule {}
+    ```
+
+- app.controller.ts 파일
+
+    ```tsx
+    import { Controller, Get } from '@nestjs/common';
+
+    @Controller('')
+    export class AppController {
+      @Get()
+      home() {
+        return 'Welcome to my Movie API';
+      }
+    }
+    ```
+
+### Express on NestJS
+
+- Nest는 Express 위에서 돌아간다.
+- 따라서 기본적으로 컨트롤러에서 아래와 같이 response, request가 사용 가능하다.
+
+    ```tsx
+    @GET()
+    getAll(@Req() req, @Res() res): Movie[] {
+    	res.json()
+    	return this.moviesService.getAll();
+    }
+    ```
+
+- 하지만 프레임워크를 바꿀 때 문제가 생긴다. → 추천하지 않는다!
+- Nestjs는 Express(프레임워크)와 Fastify(라이브러리) 위에서 모두 작동한다. - Fastify는 Express보다 두배 빠르다.
+
+### Testing in Nest
+
+- package.json 파일의 테스팅 관련 5개의 스크립트
+    - test, watch, cov, debug, e2e
+    - jest : 자바스크립트를 아주 쉽게 테스팅하는 npm 패키지
+- .spec.ts 파일
+    - test를 포함한 파일
+    - 만약 movies.controller.ts라는 파일을 테스팅하고 싶다면 movies.controller.spec.ts라는 파일이 있어야 한다.
+    - Nestjs에서는 jest가 spec.ts 파일들을 찾을 수 있도록 해노항ㅆ다.
+- npm run test:cov
+    - 코드가 얼마나 테스트 됐는지 또는 안 됐는지 알려준다.
+- npm run test:watch
+    - 모든 테스트 파일을 찾아서 살펴본다.
+- Unit Testing vs end-to-end(e2e) Testing
+    - Unit Testing
+        - 모든 function을 따로 테스트하는 것이다.
+        - 서비스에서 분리된 유닛을 테스트 한다.
+    - end-to-end(e2e) Testing
+        - 모든 시스템을 테스팅하는 것이다.
+        - 사용자 스토리 같은 것 - 사용자 관점에서 보는 것
+        - 사용자가 취할만한 액션들을 처음부터 끝까지 테스트하는 것
+
+### Unit Test
+
+- movies.service.ts 파일
+
+    ```tsx
+    import { Injectable, NotFoundException } from '@nestjs/common';
+    import { Movie } from './entities/movies.entity';
+    import { findSourceMap } from 'module';
+    import { CreateMovieDto } from './dto/create-movie.dto';
+    import { UpdateMovieDto } from './dto/update-movie.dto';
+
+    @Injectable()
+    export class MoviesService {
+        private movies: Movie[] = [];
+
+        getAll(): Movie[] {
+            return this.movies;
+        }
+
+        getOne(id: number): Movie {
+            const movie = this.movies.find(movie => movie.id === id);
+            if(!movie) {
+                throw new NotFoundException(`Movie with ID ${id} not found.`);
+            }
+            return movie;
+        }
+
+        deleteOne(id: number) {
+            this.getOne(id);
+            this.movies = this.movies.filter(movie => movie.id !== id);
+        }
+
+        create(movieData: CreateMovieDto) {
+            this.movies.push({
+                id: this.movies.length + 1,
+                ...movieData,
+            })
+        }
+
+        update(id: number, updateData: UpdateMovieDto) {
+            const movie = this.getOne(id);
+            this.deleteOne(id);
+            this.movies.push({...movie, ...updateData});
+        }
+    }
+    ```
+
+- movies.service.spec.ts 파일
+
+    ```tsx
+    import { NotFoundException } from '@nestjs/common';
+    import { Test, TestingModule } from '@nestjs/testing';
+    import { MoviesService } from './movies.service';
+
+    describe('MoviesService', () => {
+      let service: MoviesService;
+
+      beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [MoviesService],
+        }).compile();
+
+        service = module.get<MoviesService>(MoviesService);
+      });
+
+      it('should be defined', () => {
+        expect(service).toBeDefined();
+      });
+
+      describe('getAll', () => {
+        it('should return an  array', () => {
+          const result = service.getAll();
+          expect(result).toBeInstanceOf(Array);
+        });
+      });
+
+      describe('getOne', () => {
+        it('should return a movie', () => {
+          service.create({
+            title: 'Test Movie',
+            genres: ['test'],
+            year: 2000,
+          });
+          const movie = service.getOne(1);
+          expect(movie).toBeDefined();
+          expect(movie.id).toEqual(1);
+        });
+        it('should throw 404 error', () => {
+          try {
+            service.getOne(999);
+          } catch (e) {
+            expect(e).toBeInstanceOf(NotFoundException);
+            expect(e.message).toEqual('Movie with ID 999 not found.');
+          }
+        });
+      });
+
+      describe('deleteOne', () => {
+        it('deletes a movie', () => {
+          service.create({
+            title: 'Test Movie',
+            genres: ['test'],
+            year: 2000,
+          });
+          const beforeDelete = service.getAll().length;
+          service.deleteOne(1);
+          const afterDelete = service.getAll().length;
+          expect(afterDelete).toBeLessThan(beforeDelete);
+        });
+        it('should return a 404', () => {
+          try {
+            service.deleteOne(999);
+          } catch (e) {
+            expect(e).toBeInstanceOf(NotFoundException);
+          }
+        });
+      });
+
+      describe('create', () => {
+        it('should create a movie', () => {
+          const beforeCreate = service.getAll().length;
+          service.create({
+            title: 'Test Movie',
+            genres: ['test'],
+            year: 2000,
+          });
+          const afterCreate = service.getAll().length;
+          console.log(beforeCreate, afterCreate);
+          expect(afterCreate).toBeGreaterThan(beforeCreate);
+        });
+      });
+
+      describe('update', () => {
+        it('should update a movie', () => {
+          service.create({
+            title: 'Test Movie',
+            genres: ['test'],
+            year: 2000,
+          });
+          service.update(1, { title: 'Updated Test' });
+          const movie = service.getOne(1);
+          expect(movie.title).toEqual('Updated Test');
+        });
+        it('should throw a NotFoundException', () => {
+          try {
+            service.update(999, {});
+          } catch (e) {
+            expect(e).toBeInstanceOf(NotFoundException);
+          }
+        });
+      });
+    });
+    ```
+
+### e2e Test
+
+- app.e2e-spec.ts 파일
+
+    ```tsx
+    import { Test, TestingModule } from '@nestjs/testing';
+    import { INestApplication } from '@nestjs/common';
+    import * as request from 'supertest';
+    import { AppModule } from './../src/app.module';
+    import { ValidationPipe } from '@nestjs/common';
+
+    describe('AppController (e2e)', () => {
+      let app: INestApplication;
+
+      beforeAll(async () => {
+        const moduleFixture: TestingModule = await Test.createTestingModule({
+          imports: [AppModule],
+        }).compile();
+
+        app = moduleFixture.createNestApplication();
+        app.useGlobalPipes(
+          new ValidationPipe({
+            whitelist: true,
+            forbidNonWhitelisted: true,
+            transform: true,
+          }),
+        );
+        await app.init();
+      });
+
+      it('/ (GET)', () => {
+        return request(app.getHttpServer())
+          .get('/')
+          .expect(200)
+          .expect('Welcome to my Movie API');
+      });
+
+      describe('/movies', () => {
+        it('GET', () => {
+          return request(app.getHttpServer()).get('/movies').expect(200).expect([]);
+        });
+        it('POST 201', () => {
+          return request(app.getHttpServer())
+            .post('/movies')
+            .send({
+              title: 'Test',
+              year: 2000,
+              genres: ['test'],
+            })
+            .expect(201);
+        });
+        it('POST 400', () => {
+          return request(app.getHttpServer())
+            .post('/movies')
+            .send({
+              title: 'Test',
+              year: 2000,
+              genres: ['test'],
+              other: 'thing',
+            })
+            .expect(400);
+        });
+        it('DELETE', () => {
+          return request(app.getHttpServer()).delete('/movies').expect(404);
+        });
+      });
+
+      describe('/movies/:id', () => {
+        it('GET 200', () => {
+          return request(app.getHttpServer()).get('/movies/1').expect(200);
+        });
+        it('GET 404', () => {
+          return request(app.getHttpServer()).get('/movies/999').expect(404);
+        });
+        it('PATCH 200', () => {
+          return request(app.getHttpServer())
+            .patch('/movies/1')
+            .send({ title: 'Updated Test' })
+            .expect(200);
+        });
+        it('DELETE 200', () => {
+          return request(app.getHttpServer()).delete('/movies/1').expect(200);
+        });
+      });
+    });
+    ```
